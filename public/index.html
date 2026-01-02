@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VideoGadjo - Cloud Video Editor</title>
+    <meta name="description" content="Kolaborativní nástroj pro zpracování a střih videí z různých zdrojů">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0a0a0f">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Landing / Join Screen -->
+        <div class="screen landing-screen" id="landing-screen">
+            <div class="landing-content">
+                <div class="landing-logo">
+                    <span class="logo-icon-large">🎬</span>
+                    <h1 class="landing-title">VideoGadjo</h1>
+                    <p class="landing-subtitle">Kolaborativní video editor</p>
+                </div>
+
+                <div class="landing-actions">
+                    <div class="action-card" id="create-project-card">
+                        <span class="action-icon">➕</span>
+                        <h2>Vytvořit projekt</h2>
+                        <p>Začněte nový video projekt a pozvěte ostatní</p>
+                    </div>
+
+                    <div class="action-card" id="join-project-card">
+                        <span class="action-icon">🔗</span>
+                        <h2>Připojit se</h2>
+                        <p>Zadejte kód projektu pro přístup</p>
+                    </div>
+                </div>
+
+                <!-- Create Project Form -->
+                <div class="form-overlay" id="create-form">
+                    <div class="form-card">
+                        <h2>Nový projekt</h2>
+                        <div class="form-group">
+                            <label for="project-name">Název projektu</label>
+                            <input type="text" id="project-name" placeholder="např. Dovolená 2026" class="input">
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-secondary" id="cancel-create">Zrušit</button>
+                            <button class="btn btn-primary" id="confirm-create">Vytvořit</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Join Project Form -->
+                <div class="form-overlay" id="join-form">
+                    <div class="form-card">
+                        <h2>Připojit se k projektu</h2>
+                        <div class="form-group">
+                            <label for="invite-code">Kód projektu</label>
+                            <input type="text" id="invite-code" placeholder="ABCD1234" class="input input-code"
+                                maxlength="8">
+                        </div>
+                        <div class="form-group">
+                            <label for="user-name">Vaše jméno (volitelné)</label>
+                            <input type="text" id="user-name" placeholder="Jan" class="input">
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-secondary" id="cancel-join">Zrušit</button>
+                            <button class="btn btn-primary" id="confirm-join">Připojit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Editor Screen -->
+        <div class="screen editor-screen hidden" id="editor-screen">
+            <!-- Header -->
+            <header class="app-header">
+                <div class="header-left">
+                    <button class="btn btn-icon" id="btn-back" title="Zpět">←</button>
+                    <div class="project-info">
+                        <span class="project-name" id="header-project-name">Projekt</span>
+                        <span class="project-code" id="header-project-code">ABCD1234</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="btn-upload" class="btn btn-primary">
+                        <span class="btn-icon">📤</span>
+                        <span class="btn-text">Nahrát videa</span>
+                    </button>
+                    <button id="btn-export" class="btn btn-success" disabled>
+                        <span class="btn-icon">🎥</span>
+                        <span class="btn-text">Exportovat</span>
+                    </button>
+                </div>
+                <div class="header-right">
+                    <div class="sync-status" id="sync-status">
+                        <span class="sync-dot"></span>
+                        <span class="sync-text">Synchronizováno</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Left Panel: Video Player -->
+                <section class="panel player-panel">
+                    <div class="panel-header">
+                        <h2>Přehrávač</h2>
+                        <div class="player-info" id="player-info">
+                            <span class="current-time" id="current-time">00:00:00</span>
+                            <span class="separator">/</span>
+                            <span class="duration" id="duration">00:00:00</span>
+                        </div>
+                    </div>
+
+                    <div class="video-container" id="video-container">
+                        <video id="video-player" playsinline>
+                            <source src="" type="video/mp4">
+                        </video>
+                        <div class="video-placeholder" id="video-placeholder">
+                            <span class="placeholder-icon">🎞️</span>
+                            <span class="placeholder-text">Vyberte video ze seznamu</span>
+                        </div>
+                        <div class="video-loading hidden" id="video-loading">
+                            <div class="spinner"></div>
+                            <span>Načítání...</span>
+                        </div>
+                    </div>
+
+                    <!-- Timeline with marks -->
+                    <div class="video-timeline" id="video-timeline">
+                        <div class="timeline-progress" id="timeline-progress"></div>
+                        <div class="timeline-marks" id="timeline-marks"></div>
+                    </div>
+
+                    <!-- Mobile-friendly controls -->
+                    <div class="player-controls">
+                        <button class="control-btn" id="btn-skip-back" title="−10s">
+                            <span>⏪</span>
+                        </button>
+                        <button class="control-btn" id="btn-play-pause" title="Play/Pause">
+                            <span id="play-icon">▶️</span>
+                        </button>
+                        <button class="control-btn" id="btn-skip-forward" title="+10s">
+                            <span>⏩</span>
+                        </button>
+                        <div class="control-divider"></div>
+                        <button class="control-btn control-mark" id="btn-in-point" title="In point (I)">
+                            <span>IN</span>
+                        </button>
+                        <button class="control-btn control-mark" id="btn-out-point" title="Out point (O)">
+                            <span>OUT</span>
+                        </button>
+                    </div>
+
+                    <!-- Current video marks -->
+                    <div class="marks-list" id="marks-list">
+                        <h3>Značky aktuálního videa</h3>
+                        <div class="marks-container" id="marks-container">
+                            <p class="no-marks">Žádné značky</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Right Panel: Video List -->
+                <section class="panel list-panel">
+                    <div class="panel-header">
+                        <h2>Videa <span class="video-count" id="video-count">(0)</span></h2>
+                        <div class="list-controls">
+                            <select id="sort-select" class="sort-select">
+                                <option value="smart">🧠 Chytré řazení</option>
+                                <option value="upload">📤 Podle nahrání</option>
+                                <option value="filename">📄 Podle názvu</option>
+                                <option value="manual">✋ Ruční</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Upload area -->
+                    <div class="upload-area" id="upload-area">
+                        <div class="upload-dropzone" id="upload-dropzone">
+                            <span class="upload-icon">📁</span>
+                            <span class="upload-text">Přetáhněte videa sem nebo klikněte</span>
+                            <span class="upload-hint">MP4, MOV, AVI, MKV • max 5GB</span>
+                        </div>
+                        <input type="file" id="file-input" multiple accept="video/*" hidden>
+                    </div>
+
+                    <!-- Upload progress -->
+                    <div class="upload-progress hidden" id="upload-progress">
+                        <div class="upload-progress-header">
+                            <span>Nahrávání...</span>
+                            <span id="upload-progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="upload-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <!-- Video list -->
+                    <div class="videos-list" id="videos-list">
+                        <div class="empty-state">
+                            <span class="empty-icon">📹</span>
+                            <p>Zatím žádná videa</p>
+                            <p class="empty-hint">Nahrajte videa pomocí tlačítka nahoře</p>
+                        </div>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="list-stats" id="list-stats">
+                        <div class="stat">
+                            <span class="stat-value" id="total-count">0</span>
+                            <span class="stat-label">Videí</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value" id="ready-count">0</span>
+                            <span class="stat-label">Připraveno</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value" id="total-duration">00:00</span>
+                            <span class="stat-label">Délka</span>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Export Modal -->
+        <div class="modal" id="export-modal">
+            <div class="modal-content">
+                <h2>Export videa</h2>
+                <div class="form-group">
+                    <label for="export-name">Název výstupního souboru:</label>
+                    <input type="text" id="export-name" placeholder="moje_video" class="input">
+                </div>
+                <div class="export-summary" id="export-summary"></div>
+                <div class="modal-actions">
+                    <button id="btn-cancel-export" class="btn btn-secondary">Zrušit</button>
+                    <button id="btn-confirm-export" class="btn btn-success">Spustit export</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Progress Modal -->
+        <div class="modal" id="export-progress-modal">
+            <div class="modal-content">
+                <h2 id="export-progress-title">Exportování...</h2>
+                <div class="progress-bar large">
+                    <div class="progress-fill" id="export-progress-fill"></div>
+                </div>
+                <p class="progress-text" id="export-progress-text">Připravuji...</p>
+            </div>
+        </div>
+
+        <!-- Toast container -->
+        <div class="toast-container" id="toast-container"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+
+</html>
