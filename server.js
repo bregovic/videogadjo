@@ -184,14 +184,36 @@ async function getVideoMetadata(filePath) {
     });
 }
 
+// ============================================
+// DEBUG LOGGER
+// ============================================
+const MAX_LOGS = 100;
+const memoryLogs = [];
+
+function log(message, type = 'info') {
+    const entry = {
+        timestamp: new Date().toISOString(),
+        type,
+        message: typeof message === 'string' ? message : JSON.stringify(message)
+    };
+    memoryLogs.unshift(entry);
+    if (memoryLogs.length > MAX_LOGS) memoryLogs.pop();
+
+    // Also log to console
+    if (type === 'error') console.error(`[${entry.timestamp}] ${entry.message}`);
+    else console.log(`[${entry.timestamp}] ${entry.message}`);
+}
+
 async function generateProxy(inputPath, outputPath) {
     return new Promise((resolve, reject) => {
+        log(`🎬 FFmpeg Start: ${inputPath} -> ${outputPath}`);
+
         const ffmpeg = spawn('ffmpeg', [
             '-i', inputPath,
             '-vf', 'scale=640:-2',
             '-c:v', 'libx264',
             '-preset', 'ultrafast',
-            '-crf', '32',
+            '-crf', '32', // Lower quality for speed
             '-r', '24',
             '-c:a', 'aac',
             '-b:a', '64k',
@@ -200,10 +222,26 @@ async function generateProxy(inputPath, outputPath) {
             outputPath
         ]);
 
-        ffmpeg.on('error', () => reject(new Error('FFmpeg not found')));
+        let stderr = '';
+        ffmpeg.stderr.on('data', (data) => {
+            stderr += data.toString();
+        });
+
+        ffmpeg.on('error', (err) => {
+            log(`❌ FFmpeg Error: ${err.message}`, 'error');
+            reject(new Error('FFmpeg not found'));
+        });
+
         ffmpeg.on('close', (code) => {
-            if (code !== 0) reject(new Error('Proxy generation failed'));
-            else resolve(outputPath);
+            if (code !== 0) {
+                // Log last few lines of stderr for debugging
+                const lines = stderr.split('\n').slice(-10).join('\n');
+                log(`❌ FFmpeg Failed (code ${code}):\n${lines}`, 'error');
+                reject(new Error(`Proxy generation failed: ${lines}`));
+            } else {
+                log(`✅ FFmpeg Done: ${outputPath}`);
+                resolve(outputPath);
+            }
         });
     });
 }
@@ -241,6 +279,11 @@ app.get('/api/check-ffmpeg', (req, res) => {
     const ffmpeg = spawn('ffmpeg', ['-version']);
     ffmpeg.on('error', () => res.json({ available: false }));
     ffmpeg.on('close', (code) => res.json({ available: code === 0 }));
+});
+
+// Get Logs
+app.get('/api/debug/logs', (req, res) => {
+    res.json(memoryLogs);
 });
 
 // ============================================
