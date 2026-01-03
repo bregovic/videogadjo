@@ -45,6 +45,7 @@ class VideoStitchApp {
             headerProjectCode: document.getElementById('header-project-code'),
             btnUpload: document.getElementById('btn-upload'),
             btnExport: document.getElementById('btn-export'),
+            btnStorage: document.getElementById('btn-storage'),
             syncStatus: document.getElementById('sync-status'),
 
             // Player
@@ -97,7 +98,15 @@ class VideoStitchApp {
             exportProgressText: document.getElementById('export-progress-text'),
 
             // Toast
-            toastContainer: document.getElementById('toast-container')
+            toastContainer: document.getElementById('toast-container'),
+
+            // Storage modal
+            storageModal: document.getElementById('storage-modal'),
+            cacheCount: document.getElementById('cache-count'),
+            cacheSize: document.getElementById('cache-size'),
+            cachedList: document.getElementById('cached-list'),
+            btnClearCache: document.getElementById('btn-clear-cache'),
+            btnCloseStorage: document.getElementById('btn-close-storage')
         };
     }
 
@@ -125,6 +134,9 @@ class VideoStitchApp {
         this.elements.headerProjectCode.addEventListener('click', () => this.copyInviteCode());
         this.elements.btnUpload.addEventListener('click', () => this.elements.fileInput.click());
         this.elements.btnExport.addEventListener('click', () => this.showExportModal());
+        if (this.elements.btnStorage) {
+            this.elements.btnStorage.addEventListener('click', () => this.showStorageModal());
+        }
 
         // Upload
         this.elements.uploadDropzone.addEventListener('click', () => this.elements.fileInput.click());
@@ -174,6 +186,14 @@ class VideoStitchApp {
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+
+        // Storage modal
+        if (this.elements.btnClearCache) {
+            this.elements.btnClearCache.addEventListener('click', () => this.clearCache());
+        }
+        if (this.elements.btnCloseStorage) {
+            this.elements.btnCloseStorage.addEventListener('click', () => this.hideStorageModal());
+        }
     }
 
     // ==========================================
@@ -545,7 +565,7 @@ class VideoStitchApp {
     // Video Playback
     // ==========================================
 
-    playVideo(videoId) {
+    async playVideo(videoId) {
         const video = this.videos.find(v => v.id === videoId);
         if (!video) return;
 
@@ -560,9 +580,34 @@ class VideoStitchApp {
         this.elements.videoPlaceholder.classList.add('hidden');
         this.elements.videoLoading.classList.remove('hidden');
 
-        // Load video
-        this.elements.videoPlayer.src = video.proxy_url;
-        this.elements.videoPlayer.load();
+        try {
+            let videoUrl = video.proxy_url;
+
+            // Try to use cached version if proxyCache is available
+            if (window.proxyCache && video.proxy_url) {
+                const cached = await window.proxyCache.getOrCache(
+                    video.id,
+                    video.proxy_url,
+                    {
+                        projectId: this.project?.id,
+                        filename: video.original_filename
+                    }
+                );
+                if (cached) {
+                    videoUrl = cached.url;
+                    console.log(`📁 Playing from cache: ${video.original_filename}`);
+                }
+            }
+
+            // Load video
+            this.elements.videoPlayer.src = videoUrl;
+            this.elements.videoPlayer.load();
+        } catch (error) {
+            console.error('Error loading video:', error);
+            // Fallback to direct URL
+            this.elements.videoPlayer.src = video.proxy_url;
+            this.elements.videoPlayer.load();
+        }
 
         // Update list
         this.renderVideosList();
@@ -932,7 +977,62 @@ class VideoStitchApp {
             setTimeout(() => toast.remove(), 300);
         }, 3000);
     }
+
+    // ==========================================
+    // Storage / Cache Management
+    // ==========================================
+
+    async showStorageModal() {
+        if (!window.proxyCache) {
+            this.showToast('Cache není dostupná', 'error');
+            return;
+        }
+
+        const stats = await window.proxyCache.getStorageStats();
+
+        this.elements.cacheCount.textContent = stats.totalCount;
+        this.elements.cacheSize.textContent = stats.totalSizeFormatted;
+
+        // Render cached items list
+        if (stats.items.length === 0) {
+            this.elements.cachedList.innerHTML = '<p class="no-cache">Žádná stažená videa</p>';
+        } else {
+            this.elements.cachedList.innerHTML = stats.items.map(item => `
+                <div class="cached-item">
+                    <span class="cached-name">${item.filename}</span>
+                    <span class="cached-size">${window.proxyCache.formatSize(item.size)}</span>
+                    <button class="cached-delete" data-id="${item.videoId}">✕</button>
+                </div>
+            `).join('');
+
+            // Bind delete events
+            this.elements.cachedList.querySelectorAll('.cached-delete').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    await window.proxyCache.delete(btn.dataset.id);
+                    this.showStorageModal(); // Refresh
+                    this.showToast('Proxy odstraněno z cache');
+                });
+            });
+        }
+
+        this.elements.storageModal.classList.add('visible');
+    }
+
+    hideStorageModal() {
+        this.elements.storageModal.classList.remove('visible');
+    }
+
+    async clearCache() {
+        if (!window.proxyCache) return;
+
+        if (confirm('Opravdu chcete vymazat všechna stažená proxy videa?')) {
+            await window.proxyCache.clearAll();
+            this.showStorageModal(); // Refresh
+            this.showToast('Cache vymazána');
+        }
+    }
 }
 
 // Initialize app
 const app = new VideoStitchApp();
+

@@ -99,6 +99,9 @@
                     </button>
                 </div>
                 <div class="header-right">
+                    <button id="btn-storage" class="btn btn-icon" title="Lokální cache">
+                        💾
+                    </button>
                     <div class="sync-status" id="sync-status">
                         <span class="sync-dot"></span>
                         <span class="sync-text">Synchronizováno</span>
@@ -258,10 +261,33 @@
             </div>
         </div>
 
+        <!-- Storage Stats Modal -->
+        <div class="modal" id="storage-modal">
+            <div class="modal-content">
+                <h2>💾 Lokální cache</h2>
+                <div class="storage-stats" id="storage-stats">
+                    <div class="stat-row">
+                        <span class="stat-label">Staženo proxy:</span>
+                        <span class="stat-value" id="cache-count">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Využito místa:</span>
+                        <span class="stat-value" id="cache-size">0 MB</span>
+                    </div>
+                </div>
+                <div class="cached-list" id="cached-list"></div>
+                <div class="modal-actions">
+                    <button id="btn-clear-cache" class="btn btn-danger">🗑️ Vymazat cache</button>
+                    <button id="btn-close-storage" class="btn btn-secondary">Zavřít</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Toast container -->
         <div class="toast-container" id="toast-container"></div>
     </div>
 
+    <script src="/js/proxy-cache.js"></script>
     <script src="/js/app.js"></script>
 </body>
 
