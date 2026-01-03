@@ -740,10 +740,15 @@ async function initDatabase() {
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
                 original_filename VARCHAR(500) NOT NULL,
+                original_path TEXT,
                 proxy_key VARCHAR(500),
                 thumbnail_key VARCHAR(500),
+                proxy_url TEXT,
+                thumbnail_url TEXT,
                 source VARCHAR(50),
                 duration FLOAT,
+                width INT,
+                height INT,
                 file_size BIGINT,
                 filename_date TIMESTAMP,
                 metadata_date TIMESTAMP,
@@ -754,6 +759,7 @@ async function initDatabase() {
                 processing_status VARCHAR(50) DEFAULT 'pending'
             );
 
+            -- Add marks table
             CREATE TABLE IF NOT EXISTS marks (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 video_id UUID REFERENCES videos(id) ON DELETE CASCADE,
@@ -772,8 +778,15 @@ async function initDatabase() {
                 created_at TIMESTAMP DEFAULT NOW(),
                 completed_at TIMESTAMP
             );
+
+            -- Migrations for existing tables
+            ALTER TABLE videos ADD COLUMN IF NOT EXISTS original_path TEXT;
+            ALTER TABLE videos ADD COLUMN IF NOT EXISTS width INT;
+            ALTER TABLE videos ADD COLUMN IF NOT EXISTS height INT;
+            ALTER TABLE videos ADD COLUMN IF NOT EXISTS proxy_url TEXT;
+            ALTER TABLE videos ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
         `);
-        console.log('✅ Database initialized');
+        console.log('✅ Database initialized and migrated');
     } finally {
         client.release();
     }
