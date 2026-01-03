@@ -67,7 +67,7 @@ const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'videostitch';
 const uploadDir = process.env.NODE_ENV === 'production' ? '/tmp/uploads' : path.join(__dirname, 'uploads');
 const proxyDir = process.env.NODE_ENV === 'production' ? '/tmp/proxies' : path.join(__dirname, 'proxies');
 const exportDir = process.env.NODE_ENV === 'production' ? '/tmp/exports' : path.join(__dirname, 'exports');
-const thumbnailDir = path.join(__dirname, 'thumbnails');
+const thumbnailDir = process.env.NODE_ENV === 'production' ? '/tmp/thumbnails' : path.join(__dirname, 'thumbnails');
 
 [uploadDir, proxyDir, exportDir, thumbnailDir].forEach(dir => {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -420,8 +420,26 @@ app.post('/api/projects/:projectId/videos', upload.single('video'), async (req, 
             // Generate proxy locally
             generateProxyLocally(videoId, file.path, projectId);
         } else {
-            // Cloud mode - upload to R2 first
-            // ... (existing cloud logic)
+            // Cloud mode - DB insert + background processing
+
+            // 1. Insert into DB
+            await pool.query(
+                `INSERT INTO videos (
+                    id, project_id, original_filename, original_path, source,
+                    duration, width, height, file_size,
+                    filename_date, metadata_date, upload_date, uploaded_by,
+                    processing_status, included, order_index
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+                [
+                    videoId, projectId, file.originalname, file.path, source,
+                    video.duration, video.width, video.height, video.file_size,
+                    video.filename_date, video.metadata_date, video.upload_date, video.uploaded_by,
+                    'processing', true, 0
+                ]
+            );
+
+            // 2. Start background processing (generate proxy/thumb in /tmp)
+            processVideoForCloud(videoId, file.path, projectId);
         }
 
         res.json({ success: true, video });
@@ -467,6 +485,51 @@ async function generateProxyLocally(videoId, filePath, projectId) {
     }
 }
 
+
+// Cloud proxy generation (Postgres + local /tmp files)
+async function processVideoForCloud(videoId, filePath, projectId) {
+    try {
+        const proxyFilename = `${videoId}.mp4`;
+        const thumbnailFilename = `${videoId}.jpg`;
+        const proxyPath = path.join(proxyDir, proxyFilename);
+        const thumbPath = path.join(thumbnailDir, thumbnailFilename);
+
+        console.log(`☁️ Cloud processing: Generating proxy for ${videoId}...`);
+
+        // Generate proxy
+        await generateProxy(filePath, proxyPath);
+
+        // Generate thumbnail
+        await generateThumbnail(filePath, thumbPath);
+
+        const proxyUrl = `/proxies/${proxyFilename}`;
+        const thumbnailUrl = `/thumbnails/${thumbnailFilename}`;
+
+        // Update DB
+        await pool.query(
+            `UPDATE videos 
+             SET processing_status = $1, proxy_url = $2, thumbnail_url = $3 
+             WHERE id = $4`,
+            ['ready', proxyUrl, thumbnailUrl, videoId]
+        );
+
+        console.log(`✅ Cloud processing complete: ${videoId}`);
+
+    } catch (error) {
+        console.error(`❌ Cloud processing failed for ${videoId}:`, error);
+
+        // Update DB with error
+        try {
+            await pool.query(
+                `UPDATE videos SET processing_status = $1 WHERE id = $2`,
+                ['failed', videoId]
+            );
+        } catch (dbError) {
+            console.error('Failed to update error status in DB:', dbError);
+        }
+    }
+}
+
 // Delete video
 app.delete('/api/videos/:id', async (req, res) => {
     try {
@@ -480,8 +543,17 @@ app.delete('/api/videos/:id', async (req, res) => {
                 localStore.videos.delete(req.params.id);
             }
         } else {
-            // Cloud mode - delete from R2
-            // ... (existing logic)
+            // Cloud mode - DB delete
+            // Get video path first to delete files
+            const result = await pool.query('SELECT original_path FROM videos WHERE id = $1', [req.params.id]);
+            if (result.rows.length > 0) {
+                const video = result.rows[0];
+                if (video.original_path && fs.existsSync(video.original_path)) {
+                    try { fs.unlinkSync(video.original_path); } catch (e) { console.error('Failed to delete original file', e); }
+                }
+            }
+            // Delete from DB
+            await pool.query('DELETE FROM videos WHERE id = $1', [req.params.id]);
         }
 
         res.json({ success: true });
